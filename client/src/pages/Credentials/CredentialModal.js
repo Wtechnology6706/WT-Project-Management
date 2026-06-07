@@ -5,9 +5,23 @@ import { X, Eye, EyeOff } from 'lucide-react';
 import { credentialsAPI, clientsAPI, projectsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
+const EMPTY_FORM = {
+  title: '',
+  client_id: '',
+  project_id: '',
+  credential_type: 'other',
+  url: '',
+  ip_address: '',
+  username: '',
+  email: '',
+  password: '',
+  notes: '',
+};
+
 const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const credentialId = credential?.id != null ? Number(credential.id) : null;
 
   // Fetch clients and projects for dropdowns
   const { data: clientsData } = useQuery(
@@ -28,23 +42,11 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
   const {
     register,
     handleSubmit,
-    setValue,
     reset,
     watch,
     formState: { errors },
   } = useForm({
-    defaultValues: {
-      title: '',
-      client_id: '',
-      project_id: '',
-      credential_type: 'other',
-      url: '',
-      ip_address: '',
-      username: '',
-      email: '',
-      password: '',
-      notes: '',
-    }
+    defaultValues: EMPTY_FORM,
   });
 
   const watchedClientId = watch('client_id');
@@ -54,74 +56,63 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
     ? projects.filter(p => p.client_id === parseInt(watchedClientId))
     : projects;
 
-  // Fetch credential details if editing
-  const { data: credentialData } = useQuery(
-    ['credential', credential?.id],
-    () => credentialsAPI.getById(credential.id),
+  // Fetch credential details if editing (always refetch when opening a different credential)
+  const { data: credentialData, isFetching: isFetchingCredential } = useQuery(
+    ['credential', credentialId],
+    () => credentialsAPI.getById(credentialId),
     {
-      enabled: !!credential && isOpen,
-      onSuccess: (data) => {
-        const cred = data.data.data;
-        reset({
-          title: cred.title || '',
-          client_id: cred.client_id ? String(cred.client_id) : '',
-          project_id: cred.project_id ? String(cred.project_id) : '',
-          credential_type: cred.credential_type || 'other',
-          url: cred.url || '',
-          ip_address: cred.ip_address || '',
-          username: cred.username || '',
-          email: cred.email || '',
-          password: cred.password || '', // Decrypted password from API
-          notes: cred.notes || '',
-        });
-      },
+      enabled: isOpen && !!credentialId && credentialId > 0,
+      staleTime: 0,
+      cacheTime: 0,
+      refetchOnMount: 'always',
     }
   );
 
-  // Reset form when modal opens/closes
+  // Populate form when credential data loads or credential changes
   useEffect(() => {
     if (!isOpen) {
-      reset({
-        title: '',
-        client_id: '',
-        project_id: '',
-        credential_type: 'other',
-        url: '',
-        ip_address: '',
-        username: '',
-        email: '',
-        password: '',
-        notes: '',
-      });
+      reset(EMPTY_FORM);
       setShowPassword(false);
-    } else if (!credential) {
+      return;
+    }
+
+    if (!credential) {
+      reset(EMPTY_FORM);
+      return;
+    }
+
+    if (!credentialId || credentialId <= 0) {
+      return;
+    }
+
+    const cred = credentialData?.data?.data;
+    if (cred && Number(cred.id) === credentialId) {
       reset({
-        title: '',
-        client_id: '',
-        project_id: '',
-        credential_type: 'other',
-        url: '',
-        ip_address: '',
-        username: '',
-        email: '',
-        password: '',
-        notes: '',
+        title: cred.title || '',
+        client_id: cred.client_id ? String(cred.client_id) : '',
+        project_id: cred.project_id ? String(cred.project_id) : '',
+        credential_type: cred.credential_type || 'other',
+        url: cred.url || '',
+        ip_address: cred.ip_address || '',
+        username: cred.username || '',
+        email: cred.email || '',
+        password: cred.password || '',
+        notes: cred.notes || '',
       });
     }
-  }, [isOpen, credential, reset]);
+  }, [isOpen, credential, credentialId, credentialData, reset]);
 
   // Create/Update mutation
   const mutation = useMutation(
     (data) => {
-      if (credential) {
-        return credentialsAPI.update(credential.id, data);
-      } else {
-        return credentialsAPI.create(data);
+      if (credentialId && credentialId > 0) {
+        return credentialsAPI.update(credentialId, data);
       }
+      return credentialsAPI.create(data);
     },
     {
       onSuccess: () => {
-        toast.success(credential ? 'Credential updated successfully' : 'Credential created successfully');
+        toast.success(credentialId ? 'Credential updated successfully' : 'Credential created successfully');
         onSuccess();
       },
       onError: (error) => {
@@ -136,7 +127,7 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
   const onSubmit = (data) => {
     setIsSubmitting(true);
 
-    const credentialData = {
+    const payload = {
       title: data.title,
       credential_type: data.credential_type,
       password: data.password,
@@ -149,17 +140,19 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
       notes: data.notes && data.notes.trim() !== '' ? data.notes.trim() : null,
     };
 
-    mutation.mutate(credentialData);
+    mutation.mutate(payload);
   };
 
   if (!isOpen) return null;
+
+  const isEditMode = !!credentialId && credentialId > 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">
-            {credential ? 'Edit Credential' : 'Add New Credential'}
+            {isEditMode ? 'Edit Credential' : 'Add New Credential'}
           </h2>
           <button
             onClick={onClose}
@@ -169,6 +162,9 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
           </button>
         </div>
 
+        {isEditMode && isFetchingCredential && !credentialData ? (
+          <div className="p-12 text-center text-gray-500">Loading credential...</div>
+        ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
@@ -319,12 +315,13 @@ const CredentialModal = ({ isOpen, onClose, onSuccess, credential }) => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (isEditMode && isFetchingCredential)}
             >
-              {isSubmitting ? 'Saving...' : credential ? 'Update' : 'Create'}
+              {isSubmitting ? 'Saving...' : isEditMode ? 'Update' : 'Create'}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

@@ -341,7 +341,7 @@ const Credentials = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {credentials.map((credential) => (
-                      <tr key={credential.id} className="hover:bg-gray-50">
+                      <tr key={`${credential.id}-${credential.created_at}`} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             {getCredentialIcon(credential.credential_type)}

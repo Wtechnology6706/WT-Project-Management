@@ -25,7 +25,9 @@ const CredentialDetail = () => {
     ['credential', id],
     () => credentialsAPI.getById(id),
     {
-      enabled: !!id,
+      enabled: !!id && Number(id) > 0,
+      staleTime: 0,
+      refetchOnMount: 'always',
     }
   );
 
