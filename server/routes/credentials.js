@@ -473,10 +473,22 @@ router.post('/', authorizePermission('credentials', 'create'), validateCredentia
 router.put('/:id', authorizePermission('credentials', 'edit'), [
   body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
   body('credential_type').optional().isIn(['admin_panel', 'hosting', 'domain', 'ftp', 'database', 'api', 'other']).withMessage('Valid credential type is required'),
-  body('client_id').optional().isInt({ min: 1 }).withMessage('Valid client ID is required'),
-  body('project_id').optional().isInt({ min: 1 }).withMessage('Valid project ID is required'),
-  body('url').optional().isURL().withMessage('Valid URL is required'),
-  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('client_id').optional({ nullable: true, checkFalsy: true }).custom((value) => {
+    if (value === '' || value === null || value === undefined) return true;
+    if (isNaN(value) || parseInt(value) < 1) {
+      throw new Error('Valid client ID is required');
+    }
+    return true;
+  }),
+  body('project_id').optional({ nullable: true, checkFalsy: true }).custom((value) => {
+    if (value === '' || value === null || value === undefined) return true;
+    if (isNaN(value) || parseInt(value) < 1) {
+      throw new Error('Valid project ID is required');
+    }
+    return true;
+  }),
+  body('url').optional({ nullable: true, checkFalsy: true }).isURL().withMessage('Valid URL is required'),
+  body('email').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Valid email is required'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
